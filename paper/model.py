@@ -3,8 +3,12 @@ import torch.nn as nn
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, Callback
 from pytorch_lightning.loggers import CSVLogger
-from transformers import BertModel, BertJapaneseTokenizer
 from torch.utils.data import Dataset, DataLoader
+from transformers import (
+    AutoTokenizer, Trainer, TrainingArguments,
+    LukeTokenizer, LukeForSequenceClassification,
+    pipeline
+)
 import os
 import pandas as pd
 import numpy as np
@@ -13,20 +17,20 @@ from sklearn.model_selection import train_test_split
 
 
 # 乱数シードの固定
-seed = 42
-random.seed(seed)
-torch.manual_seed(seed)
-np.random.seed(seed)
-if torch.cuda.is_available():
+def seed_everything(seed=42):
+  random.seed(seed)
+  torch.manual_seed(seed)
+  np.random.seed(seed)
+  if torch.cuda.is_available():
     torch.cuda.manual_seed_all(seed)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-generator = torch.Generator()
-generator.manual_seed(seed)
+  torch.backends.cudnn.deterministic = True
+  torch.backends.cudnn.benchmark = False
+  generator = torch.Generator()
+  generator.manual_seed(seed)
 
 
 # データの読み込み
-class BertDataset(Dataset):
+class LukeDataset(Dataset):
   def __init__(self, df, tokenizer, max_token_len, text_column, label_column):
     self.df = df
     self.tokenizer = tokenizer
@@ -55,7 +59,7 @@ class BertDataset(Dataset):
 
 
 # データモジュールの作成
-class BertDataModule(pl.LightningDataModule):
+class LukeDataModule(pl.LightningDataModule):
   def __init__(self, df_train, df_valid, df_test, tokenizer, batch_size, max_token_len, text_column, label_column):
     super().__init__()
     self.df_train = df_train
@@ -68,9 +72,9 @@ class BertDataModule(pl.LightningDataModule):
     self.label_column = label_column
   
   def setup(self, stage):
-    self.train_dataset = BertDataset(self.df_train, self.tokenizer, self.max_token_len, self.text_column, self.label_column)
-    self.valid_dataset = BertDataset(self.df_valid, self.tokenizer, self.max_token_len, self.text_column, self.label_column)
-    self.test_dataset = BertDataset(self.df_test, self.tokenizer, self.max_token_len, self.text_column, self.label_column)
+    self.train_dataset = LukeDataset(self.df_train, self.tokenizer, self.max_token_len, self.text_column, self.label_column)
+    self.valid_dataset = LukeDataset(self.df_valid, self.tokenizer, self.max_token_len, self.text_column, self.label_column)
+    self.test_dataset = LukeDataset(self.df_test, self.tokenizer, self.max_token_len, self.text_column, self.label_column)
 
   def train_dataloader(self):
     return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=os.cpu_count())
@@ -129,19 +133,23 @@ class BERTForMaskedWordClassification(pl.LightningModule):
 
 
 if __name__ == '__main__':
+  # 乱数シードの固定
+  seed = 42
+  seed_everything(seed)
+
   # データの読み込み
-  df = pd.read_csv('/nowxx/y.sata/localhome/practice/tweet/experiment/df_tweet.csv', index_col=0, engine='python')
-  df_train, df_valid = train_test_split(df, test_size=0.5, random_state=seed)
+  df = pd.read_csv('train.csv', index_col=0, engine='python')
+  df_train, df_valid = train_test_split(df, test_size=0.4, random_state=seed)
   df_valid, df_test = train_test_split(df_valid, test_size=0.5, random_state=seed)
 
   # データモジュールの作成
-  model_name = 'cl-tohoku/bert-base-japanese-whole-word-masking'
-  tokenizer = BertJapaneseTokenizer.from_pretrained(model_name)
+  MODEL_NAME = 'studio-ousia/luke-japanese-base-lite'
+  tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
   text_column = 'text'
   label_column = 'id_label'
   batch_size = 16
   max_token_len = 128
-  data_module = BertDataModule(df_train, df_valid, df_test, 
+  data_module = LukeDataModule(df_train, df_valid, df_test, 
                                tokenizer, batch_size, max_token_len, text_column, label_column)
 
   # モデルの重みを保存する条件を保存
@@ -161,7 +169,7 @@ if __name__ == '__main__':
   )
 
   # csvファイルでログを保存
-  csv_logger = CSVLogger('logs_mask/', name='twitter_mask_model_4')
+  csv_logger = CSVLogger('log/', name='paper_model')
 
   # モデルの作成
   trainer = pl.Trainer(
@@ -172,7 +180,7 @@ if __name__ == '__main__':
     logger=csv_logger
   )
 
-  model = BERTForMaskedWordClassification(model_name, num_labels=4)
+  model = LukeForSequenceClassification.from_pretrained(MODEL_NAME, num_labels=2)
 
   trainer.fit(model, data_module)
   
