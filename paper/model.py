@@ -86,52 +86,6 @@ class LukeDataModule(pl.LightningDataModule):
     return DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=os.cpu_count())
 
 
-# モデルの作成
-class BERTForMaskedWordClassification(pl.LightningModule):
-  def __init__(self, model_name, num_labels):
-    super(BERTForMaskedWordClassification, self).__init__()
-    self.bert = BertModel.from_pretrained(model_name)
-    self.linear = nn.Linear(self.bert.config.hidden_size, num_labels)
-
-  def forward(self, input_ids, attention_mask):
-    outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-    sequence_output = outputs.last_hidden_state
-    masked_indices = (input_ids == tokenizer.mask_token_id)
-    masked_output = torch.masked_select(sequence_output, masked_indices.unsqueeze(-1)).view(-1, self.bert.config.hidden_size)
-    logits = self.linear(masked_output)
-    return logits
-
-  def training_step(self, batch, batch_idx):
-    logits = self(batch['input_ids'], batch['attention_mask'])
-    loss = nn.CrossEntropyLoss()(logits, batch['labels'])
-    self.log('train_loss', loss)
-    return loss
-
-  def validation_step(self, batch, batch_idx):
-    logits = self(batch['input_ids'], batch['attention_mask'])
-    loss = nn.CrossEntropyLoss()(logits, batch['labels'])
-    self.log('val_loss', loss)
-    # 精度の計算
-    _, preds = torch.max(logits, dim=1)
-    acc = torch.sum(preds == batch['labels']).item() / len(preds)
-    self.log('val_acc', acc)
-
-  def test_step(self, batch, batch_idx):
-    logits = self(batch['input_ids'], batch['attention_mask'])
-    loss = nn.CrossEntropyLoss()(logits, batch['labels'])
-    self.log('test_loss', loss)
-    _, preds = torch.max(logits, dim=1)
-    acc = torch.sum(preds == batch['labels']).item() / len(preds)
-    self.log('test_acc', acc)
-
-  def configure_optimizers(self):
-    return torch.optim.Adam(self.parameters(), lr=1e-6)
-
-  @staticmethod
-  def find_masked_index(input_ids):
-    return torch.where(input_ids == tokenizer.mask_token_id)[1]
-
-
 if __name__ == '__main__':
   # 乱数シードの固定
   seed = 42
@@ -145,8 +99,8 @@ if __name__ == '__main__':
   # データモジュールの作成
   MODEL_NAME = 'studio-ousia/luke-japanese-base-lite'
   tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-  text_column = 'text'
-  label_column = 'id_label'
+  text_column = 'abstract'
+  label_column = 'judgement'
   batch_size = 16
   max_token_len = 128
   data_module = LukeDataModule(df_train, df_valid, df_test, 
