@@ -73,8 +73,8 @@ if __name__ == '__main__':
 
   # モデルの作成
   trainer = pl.Trainer(
-    accelerator="gpu",
-    devices=1,
+    # accelerator="gpu",
+    # devices=1,
     max_epochs=100,
     callbacks=[model_checkpoint, early_stopping],
     logger=csv_logger

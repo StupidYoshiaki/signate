@@ -43,7 +43,7 @@ class MyDataset(Dataset):
     encoding['labels'] = torch.tensor(labels)
     encoding = {k: torch.squeeze(v) for k, v in encoding.items()}
 
-    print(encoding)
+    # print(encoding)
 
     return encoding
 
