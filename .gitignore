@@ -1,0 +1,4 @@
+/logs/
+/spam/data/
+/spam/model/*/*/checkpoint-*
+/spam/model/*/*/runs
