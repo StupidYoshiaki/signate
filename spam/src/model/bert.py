@@ -4,6 +4,7 @@ from transformers import (BatchEncoding, AutoTokenizer, AutoModelForSequenceClas
 from transformers.trainer_utils import set_seed
 from datasets import Dataset, load_dataset
 import os
+import sys
 
 
 # 乱数シードを42に固定
@@ -14,11 +15,27 @@ model_name = "google-bert/bert-base-uncased"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 
+def token_head_tail(token_dict: dict, head: int = 411, tail: int = 100) -> list:
+    """トークンの先頭と末尾を表示"""
+    return {key: value[:head] + value[-tail:] for key, value in token_dict.items()}
+
+
+def padding(token_dict: dict, max_length: int = 512) -> list:
+    """トークンの長さをmax_lengthに合わせる"""
+    return {key: value + [0] * (max_length - len(value)) for key, value in token_dict.items()}
+
+
 def preprocess_text_classification(
     example: dict
 ) -> BatchEncoding:
     """文書分類の事例のテキストをトークナイズし、IDに変換"""
-    encoded_example = tokenizer(example["sentence"], max_length=512)
+    encoded_example = tokenizer(example["sentence"])
+    # 512トークンを超える場合は先頭と末尾を用いる
+    if len(encoded_example["input_ids"]) > 512:
+        encoded_example = token_head_tail(encoded_example)
+    # 超えない場合は0でパディングする
+    else:
+        encoded_example = padding(encoded_example)
     # モデルの入力引数である"labels"をキーとして格納する
     encoded_example["labels"] = example["label"]
     return encoded_example
